@@ -1,0 +1,7 @@
+{
+  "unavailable-not-connected": "The device is not connected",
+  "access-code-create": "Access code on device __deviceName__ created with name __accessCodeName__",
+  "access-code-delete": "Access code on device __deviceName__ deleted with name __accessCodeName__",
+  "access-code-update": "Access code on device __deviceName__ updated with name __accessCodeName__",
+  "battery_timeout_running": "Refreshing the battery is only available once per minute"
+}

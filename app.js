@@ -39,7 +39,15 @@ class SchlageApp extends homey_oauth2app_1.OAuth2App {
                 await this.deletePin(args.pin, args.device, name);
                 // Then add
                 this.log('Add pin', args.pin);
-                await args.device.oAuth2Client.createAccessCode(args.device.id, args.pin, name).catch(this.error);
+                const existingAccessCodes = await args.device.oAuth2Client.listAccessCodes(args.device.id);
+                const pin = args.pin.trim();
+                if (existingAccessCodes) {
+                    const firstAccessCode = existingAccessCodes.accessCodes[0];
+                    if (pin.length !== firstAccessCode.accessCodeLength || isNaN(Number(pin))) {
+                        throw new Error('Pin should be the a number of the same length as the existing codes, which is ' + firstAccessCode.accessCodeLength);
+                    }
+                }
+                await args.device.oAuth2Client.createAccessCode(args.device.id, pin, name).catch(this.error);
             });
             const deleteCloudPINAction = this.homey.flow.getActionCard('delete_pin_cloud');
             deleteCloudPINAction.registerRunListener(async (args) => {
@@ -52,7 +60,7 @@ class SchlageApp extends homey_oauth2app_1.OAuth2App {
             });
             const deleteZwavePINAction = this.homey.flow.getActionCard('delete_pin_zwave');
             deleteZwavePINAction.registerRunListener(async (args) => {
-                await args.device.deletePinCode(args.ID);
+                await args.device.deletePinCode(args.ID).catch(this.error);
             });
             this.log('Schlage has been initialized');
         }
@@ -68,7 +76,7 @@ class SchlageApp extends homey_oauth2app_1.OAuth2App {
             pin = pin.trim();
             const firstAccessCode = existingAccessCodes.accessCodes[0];
             if (pin.length !== firstAccessCode.accessCodeLength || isNaN(Number(pin))) {
-                throw new Error('Pin should be the a number of the same length as the existing codes');
+                throw new Error('Pin should be the a number of the same length as the existing codes, which is ' + firstAccessCode.accessCodeLength);
             }
             const matchingAccessCode = existingAccessCodes.accessCodes.find(accessCode => accessCode.code === pin);
             this.log('Matching code', matchingAccessCode);
@@ -96,7 +104,7 @@ class SchlageApp extends homey_oauth2app_1.OAuth2App {
         this._webhook = await this.homey.cloud.createWebhook(homey_1.default.env.WEBHOOK_ID, homey_1.default.env.WEBHOOK_SECRET, {
             $keys: [userId],
         }).catch(this.error);
-        this._webhook?.on('message', this._onWebhookMessage.bind(this));
+        this._webhook?.on('message', (message) => this._onWebhookMessage(message).catch(this.error));
     }
     /** Make Schlage event registration, will be valid for one day */
     async registerRegistration(userId, api) {
@@ -131,43 +139,45 @@ class SchlageApp extends homey_oauth2app_1.OAuth2App {
     async _onWebhookMessage(message) {
         this.log('Webhook received', message);
         if (message.body.length !== 1) {
-            return this.error('Webhook can not be processed!');
+            this.error('Webhook can not be processed!');
+            return;
         }
         const payload = message.body[0].data;
         // Find device
         const device = this.homey.drivers.getDriver('cloud_lock').getDevices()
             .find((device) => device.getData().id === payload.deviceId);
         if (!device) {
-            return this.error('Webhook for unknown device received!');
+            this.error('Webhook for unknown device received!');
+            return;
         }
         // Handle message
         switch (payload.eventType) {
             case SchlageDefinitions_1.eventType_accessCode:
-                await this.setAndTriggerLocked(device, payload.lockState === SchlageDefinitions_1.lockState_locked, 'Access code: ' + payload.triggeredBy);
+                await this.setAndTriggerLocked(device, payload.lockState === SchlageDefinitions_1.lockState_locked, 'Access code: ' + payload.triggeredBy).catch(this.error);
                 break;
             case SchlageDefinitions_1.eventType_autoRelock:
-                await this.setAndTriggerLocked(device, payload.lockState === SchlageDefinitions_1.lockState_locked, 'Auto relock');
+                await this.setAndTriggerLocked(device, payload.lockState === SchlageDefinitions_1.lockState_locked, 'Auto relock').catch(this.error);
                 break;
             case SchlageDefinitions_1.eventType_1TouchLocking:
-                await this.setAndTriggerLocked(device, payload.lockState === SchlageDefinitions_1.lockState_locked, '1 touch lock');
+                await this.setAndTriggerLocked(device, payload.lockState === SchlageDefinitions_1.lockState_locked, '1 touch lock').catch(this.error);
                 break;
             case SchlageDefinitions_1.eventType_thumbturn:
-                await this.setAndTriggerLocked(device, payload.lockState === SchlageDefinitions_1.lockState_locked, 'Thumbturn');
+                await this.setAndTriggerLocked(device, payload.lockState === SchlageDefinitions_1.lockState_locked, 'Thumbturn').catch(this.error);
                 break;
             case SchlageDefinitions_1.eventType_virtualKey:
-                await this.setAndTriggerLocked(device, payload.lockState === SchlageDefinitions_1.lockState_locked, 'Virtual key: ' + payload.triggeredBy);
+                await this.setAndTriggerLocked(device, payload.lockState === SchlageDefinitions_1.lockState_locked, 'Virtual key: ' + payload.triggeredBy).catch(this.error);
                 break;
             case SchlageDefinitions_1.eventType_forcedEntry:
-                await device.setCapabilityValue('alarm_intrusion', true);
+                await device.setCapabilityValue('alarm_intrusion', true).catch(this.error);
                 this.homey.setTimeout(() => device.setCapabilityValue('alarm_intrusion', false), 1000 * 60 * 5 // Reset after 5 minutes
                 );
                 break;
             case SchlageDefinitions_1.eventType_batteryLow:
             case SchlageDefinitions_1.eventType_batteryCriticallyLow:
-                await device.setCapabilityValue('alarm_battery', true);
+                await device.setCapabilityValue('alarm_battery', true).catch(this.error);
                 break;
             case SchlageDefinitions_1.eventType_lockOffline:
-                await device.setUnavailable(this.homey.__('unavailable-not-connected'));
+                await device.setUnavailable(this.homey.__('unavailable-not-connected')).catch(this.error);
                 break;
             case SchlageDefinitions_1.eventType_accessCodeCreate:
                 await this.homey.notifications.createNotification({
@@ -175,7 +185,7 @@ class SchlageApp extends homey_oauth2app_1.OAuth2App {
                         deviceName: payload.deviceName,
                         accessCodeName: payload.accessCode?.name
                     })
-                });
+                }).catch(this.error);
                 break;
             case SchlageDefinitions_1.eventType_accessCodeUpdate:
                 await this.homey.notifications.createNotification({
@@ -183,7 +193,7 @@ class SchlageApp extends homey_oauth2app_1.OAuth2App {
                         deviceName: payload.deviceName,
                         accessCodeName: payload.accessCode?.name
                     })
-                });
+                }).catch(this.error);
                 break;
             case SchlageDefinitions_1.eventType_accessCodeDelete:
                 await this.homey.notifications.createNotification({
@@ -191,10 +201,10 @@ class SchlageApp extends homey_oauth2app_1.OAuth2App {
                         deviceName: payload.deviceName,
                         accessCodeName: payload.accessCode?.name
                     })
-                });
+                }).catch(this.error);
                 break;
             case SchlageDefinitions_1.eventType_lockOnline:
-                await device.setAvailable();
+                await device.setAvailable().catch(this.error);
                 break;
             default:
                 throw new Error('Webhook type not supported!');
@@ -202,30 +212,30 @@ class SchlageApp extends homey_oauth2app_1.OAuth2App {
     }
     /** Set capability, then trigger with source token */
     async setAndTriggerLocked(device, locked, source) {
-        await device.setCapabilityValue('locked', locked);
+        await device.setCapabilityValue('locked', locked).catch(this.error);
         const trigger = locked ? this._lockTrigger : this._unlockTrigger;
-        await trigger.trigger(device, { source: source });
+        await trigger.trigger(device, { source: source }).catch(this.error);
     }
     // Flow triggers
     // eslint-disable-next-line @typescript-eslint/ban-types
-    triggerLock(device, tokens) {
+    async triggerLock(device, tokens) {
         this.log('Triggering lock', tokens);
         const lockValue = device.getCapabilityValue('locked');
         if (lockValue === false) {
             this.log('Not triggering flow, value changed in the mean time');
             return;
         }
-        this._lockTrigger.trigger(device, tokens).catch(this.error);
+        await this._lockTrigger.trigger(device, tokens).catch(this.error);
     }
     // eslint-disable-next-line @typescript-eslint/ban-types
-    triggerUnlock(device, tokens) {
+    async triggerUnlock(device, tokens) {
         this.log('Triggering unlock', tokens);
         const lockValue = device.getCapabilityValue('locked');
         if (lockValue === true) {
             this.log('Not triggering flow, value changed in the mean time');
             return;
         }
-        this._unlockTrigger.trigger(device, tokens).catch(this.error);
+        await this._unlockTrigger.trigger(device, tokens).catch(this.error);
     }
 }
 exports.default = SchlageApp;

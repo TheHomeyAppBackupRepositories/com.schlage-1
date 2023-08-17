@@ -1,7 +1,7 @@
 {
   "_comment": "This file is generated. Please edit .homeycompose/app.json instead.",
   "id": "com.schlage",
-  "version": "0.1.2",
+  "version": "1.0.3",
   "compatibility": ">=7.4.0",
   "platforms": [
     "local",
@@ -84,12 +84,14 @@
           "en": "Unlocked",
           "nl": "Ontgrendeld",
           "de": "Entriegelt",
-          "fr": "Déverrouiller",
+          "fr": "Déverrouillé",
           "it": "Aperta",
-          "sv": "Precis upp",
-          "no": "Låst opp",
+          "sv": "Olåst",
+          "no": "Ulåst",
           "es": "Abierto",
-          "da": "Låst op"
+          "da": "Låst op",
+          "ru": "Открыто",
+          "pl": "Odblokowane"
         },
         "tokens": [
           {
@@ -117,12 +119,14 @@
           "en": "Locked",
           "nl": "Vergrendeld",
           "de": "Verriegelt",
-          "fr": "Verrouiller",
+          "fr": "Verrouillé",
           "it": "Chiusa",
-          "sv": "Precis",
+          "sv": "Låst",
           "no": "Låst",
           "es": "Cerrado",
-          "da": "Låst"
+          "da": "Låst",
+          "ru": "Закрыто",
+          "pl": "Zablokowane"
         },
         "tokens": [
           {
@@ -342,7 +346,7 @@
         }
       ],
       "name": {
-        "en": "Encode-Wifi"
+        "en": "Encode WiFi"
       },
       "capabilities": [
         "locked",
@@ -365,7 +369,7 @@
     },
     {
       "name": {
-        "en": "Connect-Z-Wave"
+        "en": "Connect Z-Wave"
       },
       "class": "lock",
       "capabilities": [
